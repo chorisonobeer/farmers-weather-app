@@ -1,0 +1,210 @@
+# 佐渡農作業天気アプリ - Cursor開発ルール
+
+## プロジェクト概要
+佐渡ヶ島の急激な天気変化に対応した農作業者向け天気予報アプリ。
+React + TypeScript + Vite + Tailwind CSSで構築。
+
+## コーディング規約
+
+### TypeScript
+- 厳密な型定義を使用
+- `any`型の使用は禁止
+- インターフェースは`services/types.ts`に集約
+- 関数には必ず戻り値の型を明示
+
+### React
+- 関数コンポーネントのみ使用（クラスコンポーネント禁止）
+- Props型は必ずインターフェースで定義
+- コンポーネントはディレクトリ単位で管理（index.tsでエクスポート）
+- カスタムフックは`use`プレフィックス
+
+### Tailwind CSS
+- インラインスタイルは使用しない
+- カスタムクラスは最小限に（Tailwindのユーティリティクラス優先）
+- 色は`tailwind.config.js`で定義したカスタムカラーを使用
+  - `workable`: 作業適（緑）
+  - `caution`: 要注意（黄）
+  - `unsuitable`: 作業不適（赤）
+  - `night`: 夜間（灰）
+
+### ファイル命名
+- コンポーネント: PascalCase（例: `CurrentWeather.tsx`）
+- フック: camelCase（例: `useWeatherData.ts`）
+- ユーティリティ: camelCase（例: `workability.ts`）
+- 定数: UPPER_SNAKE_CASE（例: `WORKABILITY_THRESHOLDS`）
+
+### ディレクトリ構造
+```
+src/
+├── components/       # UIコンポーネント
+├── hooks/            # カスタムフック
+├── services/         # API通信・型定義
+└── utils/            # ユーティリティ関数
+```
+
+## 実装ガイドライン
+
+### 1. コンポーネント作成時
+- `components/ComponentName/`ディレクトリを作成
+- `ComponentName.tsx`にコンポーネント本体
+- `index.ts`でエクスポート
+- Props型は必ず定義
+
+例:
+```typescript
+interface Props {
+  weather: CurrentWeather;
+  onRefresh: () => void;
+}
+
+export const CurrentWeather: React.FC<Props> = ({ weather, onRefresh }) => {
+  // 実装
+};
+```
+
+### 2. API通信時
+- `services/`配下にAPI専用ファイルを作成
+- レスポンス型は`types.ts`で定義
+- エラーハンドリングは必ず実装
+- async/awaitを使用
+
+例:
+```typescript
+export const fetchWeatherData = async (location: Location): Promise<WeatherData> => {
+  try {
+    const response = await fetch(url);
+    if (!response.ok) throw new Error('API error');
+    return response.json();
+  } catch (error) {
+    console.error('Error:', error);
+    throw error;
+  }
+};
+```
+
+### 3. カスタムフック作成時
+- `hooks/`ディレクトリに配置
+- 戻り値はオブジェクト形式
+- ローディング状態とエラー状態を必ず含める
+
+例:
+```typescript
+export const useWeatherData = (location: Location | null) => {
+  const [data, setData] = useState<WeatherData | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  
+  // 実装
+  
+  return { data, loading, error, refresh };
+};
+```
+
+### 4. 作業適性判定
+- `utils/workability.ts`の関数を使用
+- 独自の判定ロジックは追加しない
+- 判定基準は`constants.ts`の`WORKABILITY_THRESHOLDS`に従う
+
+### 5. 日時フォーマット
+- `utils/formatters.ts`の関数を使用
+- 新しいフォーマットが必要な場合はformatters.tsに追加
+
+### 6. スタイリング
+- レスポンシブデザインを考慮
+- モバイルファースト（最小幅320px）
+- タップターゲットは最小44x44px
+- 屋外での視認性を重視（高コントラスト、大きな文字）
+
+## 開発フロー
+
+### 新機能追加時
+1. IMPLEMENTATION_GUIDE.mdの該当STEPを確認
+2. 必要な型定義を`services/types.ts`に追加
+3. ユーティリティ関数が必要なら`utils/`に追加
+4. コンポーネントを`components/`に作成
+5. 必要に応じてカスタムフックを`hooks/`に作成
+6. `App.tsx`で統合
+
+### バグ修正時
+1. 問題の原因を特定
+2. 該当ファイルを修正
+3. 関連する型定義も更新（必要に応じて）
+4. エラーハンドリングを確認
+
+### リファクタリング時
+- 一度に1つの機能のみ変更
+- 型定義を変更した場合は全ファイルをチェック
+- 既存の動作を壊さないように注意
+
+## 重要な注意事項
+
+### データソース
+- **Open-Meteo API**: メインの天気データソース
+- APIキー不要、無料で利用可能
+- 商用利用時は出典明記が必要
+
+### 作業適性判定の基準
+```
+🟢 作業適:
+  - 降水量 < 1mm/h
+  - 風速 < 10m/s
+  - 雷なし
+  - 6-19時の時間帯
+
+🟡 要注意:
+  - 降水量 1-3mm/h
+  - 風速 10-15m/s
+  - 雷注意報
+
+🔴 作業不適:
+  - 降水量 > 3mm/h
+  - 風速 > 15m/s
+  - 雷警報
+
+⚫ 夜間:
+  - 19-6時は判定対象外
+```
+
+### パフォーマンス
+- 初回読み込み: 3秒以内
+- API更新: 現在天気10分ごと、予報1時間ごと
+- 不要な再レンダリングを避ける（React.memoの活用）
+
+### アクセシビリティ
+- 色だけでなくアイコンと文字を併用
+- alt属性を適切に設定
+- キーボード操作可能に
+
+## トラブルシューティング
+
+### APIエラー時
+- Open-Meteo APIの呼び出し制限を確認
+- ネットワーク接続を確認
+- 位置情報が正しく取得できているか確認
+
+### 位置情報が取得できない時
+- ブラウザの位置情報許可を確認
+- デフォルト位置（佐渡市中心）にフォールバック
+
+### スタイルが適用されない時
+- Tailwind CSSのビルドを確認
+- `index.css`のインポートを確認
+- ブラウザキャッシュをクリア
+
+## 参考資料
+- REQUIREMENTS.md: 詳細な要件定義
+- IMPLEMENTATION_GUIDE.md: 段階的な実装手順
+- API_SPECIFICATION.md: API仕様書
+- ARCHITECTURE.md: アーキテクチャ設計
+
+## Cursorでの使い方
+
+### コード生成時
+「IMPLEMENTATION_GUIDE.mdのSTEP Xを実装して」と指示すれば、
+このルールに従ったコードが生成されます。
+
+### 修正時
+「〇〇を△△に変更して。.cursorrulesに従ってください」と指示してください。
+
+### 質問時
+「この実装は.cursorrulesに沿っていますか？」と確認できます。
